@@ -56,3 +56,79 @@ Một Kafka cluster (cụm Kafka) là một nhóm các máy chủ Kafka được
 - Replication: Kafka sử dụng cơ chế nhân bản (replication) để đảm bảo tính nhất quán và tin cậy của dữ liệu. Mỗi partition trong Kafka có thể có nhiều replica, trong đó một replica chính (leader replica) xử lý yêu cầu ghi và đọc, trong khi các replica sao lưu (follower replicas) duy trì bản sao của dữ liệu. Cơ chế nhân bản giúp đảm bảo sự mất mát dữ liệu khi một broker hoặc replica gặp sự cố.
 
 Khi một Kafka cluster được thiết lập và hoạt động, producer có thể gửi thông điệp tới các topic, các broker trong cụm Kafka nhận và lưu trữ thông điệp trong các partition tương ứng, và consumer có thể đọc và xử lý thông điệp từ các topic. Controller và ZooKeeper giữ vai trò quan trọng trong việc quản lý và đồng bộ hoạt động của cụm Kafka. Việc sử dụng Kafka cluster cho phép mở rộng khả năng xử lý và lưu trữ, đảm bảo tính sẵn sàng và tin cậy, và tăng cường khả năng mở rộng của hệ thống Kafka trong việc xử lý dữ liệu dòng thông tin.
+## III. Các mô hình 
+Có hai mô hình chính khi triển khai Kafka cluster là standalone (đơn lẻ) và distributed (phân tán).
+
+Kafka Cluster Standalone (Đơn lẻ):
+- Mô hình standalone là một cấu hình đơn giản, trong đó chỉ có một broker Kafka hoạt động độc lập.
+- Mô hình này thích hợp cho các ứng dụng nhỏ hoặc trong môi trường phát triển và thử nghiệm.
+- Standalone Kafka cluster không sử dụng ZooKeeper để quản lý metadata và không có khả năng nhân bản hoặc phân chia công việc.
+
+Kafka Cluster Distributed (Phân tán):
+- Mô hình phân tán là một cấu hình mạnh mẽ hơn, bao gồm nhiều broker Kafka hoạt động cùng nhau trong một cụm.
+- Mô hình này cho phép mở rộng khả năng xử lý, lưu trữ và đảm bảo tính sẵn sàng cao hơn.
+- Kafka cluster phân tán sử dụng ZooKeeper để quản lý metadata, theo dõi trạng thái và điều phối các hoạt động giữa các broker.
+- Các partition trong các topic được chia đều giữa các broker, và mỗi broker quản lý một hoặc nhiều partition.
+
+Trong mô hình phân tán, Kafka cung cấp tính năng tự động nhân bản (replication) và điều phối (balancing) dữ liệu giữa các broker. Việc sử dụng Kafka cluster phân tán giúp tăng khả năng mở rộng, tính sẵn sàng cao và khả năng xử lý song song trong hệ thống xử lý dữ liệu dòng thông tin. Một Kafka cluster có thể có hàng chục hoặc hàng trăm broker, tùy thuộc vào quy mô và yêu cầu của ứng dụng. Sự lựa chọn giữa mô hình standalone và mô hình phân tán phụ thuộc vào quy mô, hiệu suất, tin cậy và yêu cầu của hệ thống.
+## IV. Setup Kafka
+Bước 1: Tạo 1 user là kafka:
+```
+sudo adduser kafka
+sudo adduser kafka sudo
+```
+Sau đó đăng nhập vào tài khoản kafka: `su -l kafka`.
+Bước 2: Tải và giải nén Kafka Binaries:
+- Tạo 1 folder có tên là download: `mkdir ~/Downloads`.
+- Tải kafka binaries về máy: `curl "https://downloads.apache.org/kafka/2.8.2/kafka_2.13-2.8.2.tgz" -o ~/Downloads/kafka.tgz`.
+- Tạo thêm folder kafka: `mkdir ~/kafka && cd ~/kafka`.
+- Giải nén file vừa tải về: `tar -xvzf ~/Downloads/kafka.tgz --strip 1`.
+
+Bước 3: Cấu hình máy chủ kafka:
+- Mở tệp server.properties: `nano ~/kafka/config/server.properties`.
+- Thêm dòng sau vào cuối đoạn: `delete.topic.enable = true`.
+- Tiếp đến tìm đến dòng `log.dirs` sau đó sửa từ dấu - về thành dấu / rồi lưu và thoát khỏi nano.
+
+Bước 4: Cấu hình zookeeper và kafka.service:
+- Tạo file zookeeper: `sudo nano /etc/systemd/system/zookeeper.service`
+- Thêm vào file đoạn sau:
+```
+[Unit]
+Requires=network.target remote-fs.target
+After=network.target remote-fs.target
+
+[Service]
+Type=simple
+User=kafka
+ExecStart=/home/kafka/kafka/bin/zookeeper-server-start.sh /home/kafka/kafka/config/zookeeper.properties
+ExecStop=/home/kafka/kafka/bin/zookeeper-server-stop.sh
+Restart=on-abnormal
+
+[Install]
+WantedBy=multi-user.target
+```
+- Tạo file kafka.service: `sudo nano /etc/systemd/system/kafka.service`
+- Thêm vào file đoạn sau:
+```
+[Unit]
+Requires=zookeeper.service
+After=zookeeper.service
+
+[Service]
+Type=simple
+User=kafka
+ExecStart=/bin/sh -c '/home/kafka/kafka/bin/kafka-server-start.sh /home/kafka/kafka/config/server.properties > /home/kafka/kafka/kafka.log 2>&1'
+ExecStop=/home/kafka/kafka/bin/kafka-server-stop.sh
+Restart=on-abnormal
+
+[Install]
+WantedBy=multi-user.target
+```
+- Sau khi thêm 2 dòng vào config thì chúng ta chạy kafka: `sudo systemctl start kafka`
+- Kiểm tra tình trạng kafka: `sudo systemctl status kafka`
+- Tiếp theo chạy zookeeper: `sudo systemctl enable zookeeper`
+- Hiện thông báo `Created symlink /etc/systemd/system/multi-user.target.wants/zookeeper.service → /etc/systemd/system/zookeeper.service.` là thành công.
+- Tiếp theo chạy lệnh: `sudo systemctl enable kafka`
+- Hiện thông báo `Created symlink /etc/systemd/system/multi-user.target.wants/kafka.service → /etc/systemd/system/kafka.service.` là thành công.
+
+Bước 5: Test:
