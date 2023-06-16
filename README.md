@@ -132,3 +132,7 @@ WantedBy=multi-user.target
 - Hiện thông báo `Created symlink /etc/systemd/system/multi-user.target.wants/kafka.service → /etc/systemd/system/kafka.service.` là thành công.
 
 Bước 5: Test:
+Chạy thử theo link bên dưới:
+```
+https://www.digitalocean.com/community/tutorials/how-to-install-apache-kafka-on-ubuntu-20-04
+```
